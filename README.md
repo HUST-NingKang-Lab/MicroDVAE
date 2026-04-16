@@ -1,8 +1,8 @@
-# MicroDVAE
+# MicroDVAE 🧬
 
 MicroDVAE is a lightweight inference-only repository for converting an ordered protein FASTA file into discrete dVAE tokens and their corresponding codebook embeddings.
 
-This repository is designed for **public inference**. It does not include training code, benchmark scripts, private datasets, or model weights.
+This repository is designed for **public inference** 🚀. It does not include training code, benchmark scripts, private datasets, or large model weights inside the repository.
 
 ## What the CLI does
 
@@ -20,7 +20,7 @@ Given a protein FASTA file in genomic order, the pipeline will:
 - PyTorch
 - A GPU is recommended for PAIR-esm2 inference, but CPU mode also works
 - Internet access for the first download of `h4duan/PAIR-esm2`, unless you already have a local copy
-- A MicroDVAE checkpoint file provided separately
+- A MicroDVAE checkpoint file
 
 Install dependencies:
 
@@ -41,7 +41,25 @@ You can keep the default or point to a local directory with `--pair-esm-model`.
 
 ### MicroDVAE checkpoint
 
-This repository does **not** ship a checkpoint. Provide your own path with `--checkpoint`.
+A public MicroDVAE checkpoint is available on Hugging Face 📦:
+
+- URL: <https://huggingface.co/LudensZhang/MicroDVAE/blob/main/model.ckpt>
+
+This repository still expects a **local checkpoint path** for `--checkpoint`, so download the file first.
+
+Example:
+
+```bash
+mkdir -p checkpoints
+wget -O checkpoints/model.ckpt \
+  https://huggingface.co/LudensZhang/MicroDVAE/resolve/main/model.ckpt
+```
+
+Then pass it to the CLI:
+
+```bash
+--checkpoint checkpoints/model.ckpt
+```
 
 ## Input format
 
@@ -56,6 +74,15 @@ MNNRKIAVALAGFATVAQA
 MSEKQKIIAIVGCGNIGLELAM
 ```
 
+## Quick start ⚡
+
+```bash
+python scripts/tokenize_genome.py \
+  --input examples/example_proteins.faa \
+  --checkpoint checkpoints/model.ckpt \
+  --output-dir outputs/example
+```
+
 ## Usage
 
 Basic example:
@@ -63,7 +90,7 @@ Basic example:
 ```bash
 python scripts/tokenize_genome.py \
   --input examples/example_proteins.faa \
-  --checkpoint /path/to/microdvae.ckpt \
+  --checkpoint checkpoints/model.ckpt \
   --output-dir outputs/example
 ```
 
@@ -72,7 +99,7 @@ Example with explicit model and device:
 ```bash
 python scripts/tokenize_genome.py \
   --input /path/to/genome_proteins.faa \
-  --checkpoint /path/to/microdvae.ckpt \
+  --checkpoint checkpoints/model.ckpt \
   --pair-esm-model h4duan/PAIR-esm2 \
   --device cuda:0 \
   --batch-size 32 \
@@ -129,11 +156,12 @@ JSON metadata containing:
 
 Large genomes can contain more proteins than are practical to process in a single dVAE forward pass. The CLI therefore tokenizes the protein embedding sequence in contiguous chunks controlled by `--window-size`. Tokens are concatenated back in the original FASTA order.
 
-## Recommended workflow
+## Recommended workflow 🧪
 
 1. Prepare one ordered protein FASTA per genome.
-2. Run the CLI on each genome.
-3. Use `tokens.tsv` for inspection and `tokens.npy` or `codebook_embeddings.npy` for downstream analysis.
+2. Download the public checkpoint from Hugging Face.
+3. Run the CLI on each genome.
+4. Use `tokens.tsv` for inspection and `tokens.npy` or `codebook_embeddings.npy` for downstream analysis.
 
 ## Troubleshooting
 
@@ -169,4 +197,4 @@ This repository intentionally excludes:
 - benchmark pipelines
 - unpublished analysis code
 
-It is intended to be a clean public interface for MicroDVAE inference only.
+It is intended to be a clean public interface for MicroDVAE inference only ✨.
