@@ -109,7 +109,6 @@ class VectorQuantizer(nn.Module):
 
         z_q = z_q.view(B, L, C)
         # Straight-through estimator
-        # 修复：前向数值等于 z_q，梯度指向 z_e
         z_q_st = z_e + (z_q - z_e).detach()
 
         # Losses with mask
@@ -149,17 +148,16 @@ class VectorQuantizerEMA(nn.Module):
         eps: float = 1e-5,
         restart_unused: bool = True,
         restart_threshold: float = 1.0,
-        use_cosine: bool = True,  # 新增：使用余弦相似度检索
+        use_cosine: bool = True,
         use_gumbel: bool = True,
         gumbel_tau_start: float = 1.0,
         gumbel_tau_end: float = 0.1,
         gumbel_warmup_steps: int = 10000,
         code_dropout_rate: float = 0.05,
         normalize_after_ema: bool = True,
-        # 新增：训练用硬量化与硬 EMA，避免前期均值化
-        quantize_with_soft: bool = False,   # 训练量化是否用软分配
-        ema_use_soft: bool = False,         # EMA 是否用软分配
-        min_step_before_restart: int = 100, # 重启死码本的最小步数
+        quantize_with_soft: bool = False,
+        ema_use_soft: bool = False,
+        min_step_before_restart: int = 100,
     ):
         super().__init__()
         self.codebook = nn.Embedding(num_codes, code_dim)
@@ -191,7 +189,6 @@ class VectorQuantizerEMA(nn.Module):
             return torch.as_tensor(self.gumbel_tau_end, device=self.codebook.weight.device)
         t = torch.minimum(self.step.float(), torch.tensor(float(self.gumbel_warmup_steps), device=self.step.device))
         r = t / float(self.gumbel_warmup_steps)
-        # 指数退火
         return self.gumbel_tau_start * (self.gumbel_tau_end / self.gumbel_tau_start) ** r
 
     @torch.no_grad()
@@ -215,7 +212,6 @@ class VectorQuantizerEMA(nn.Module):
 
         e_weight = self.codebook.weight  # [K, C]
 
-        # 1) logits 计算（加数值防护）
         if self.use_cosine:
             flat_s = F.normalize(flat, dim=1, eps=1e-8)
             e_s = F.normalize(e_weight, dim=1, eps=1e-8)
@@ -226,7 +222,6 @@ class VectorQuantizerEMA(nn.Module):
             distances = z_norm - 2 * flat @ e_weight.T + e_norm
             logits = -distances
 
-        # 码本丢弃（列掩码）
         if self.training and self.code_dropout_rate > 0.0:
             K = logits.size(1)
             drop = torch.rand(K, device=logits.device) < self.code_dropout_rate
@@ -234,10 +229,9 @@ class VectorQuantizerEMA(nn.Module):
                 drop[torch.randint(0, K, (1,), device=logits.device)] = False
             logits = logits.masked_fill(drop.unsqueeze(0), -1e9)
 
-        # 数值裁剪 + NaN/Inf 清理，避免 softmax 溢出
+        # Clamp logits and remove NaN or Inf values before softmax.
         logits = torch.clamp(torch.nan_to_num(logits, nan=0.0, neginf=-1e9, posinf=1e9), min=-60.0, max=60.0)
 
-        # 2) 概率（计算软分配用于可选路径），同时拿硬索引
         if self.training and self.use_gumbel:
             U = torch.rand_like(logits).clamp_(1e-6, 1 - 1e-6)
             g = -torch.log(-torch.log(U))
@@ -248,11 +242,9 @@ class VectorQuantizerEMA(nn.Module):
         hard_idx = logits.argmax(dim=1)
         probs_hard = F.one_hot(hard_idx, num_classes=self.num_codes).type_as(flat)
 
-        # mask 行
         probs_soft = probs_soft * flat_mask.unsqueeze(1).float()
         probs_hard = probs_hard * flat_mask.unsqueeze(1).float()
 
-        # 量化：默认硬分配（更稳），可切换为软分配
         probs_for_quant = probs_soft if (self.training and self.quantize_with_soft) else probs_hard
         row_sums = probs_for_quant.sum(dim=1, keepdim=True).clamp_min(1e-8)
         probs_for_quant = probs_for_quant / row_sums
@@ -261,10 +253,8 @@ class VectorQuantizerEMA(nn.Module):
         z_q_flat = torch.nan_to_num(z_q_flat)
         z_q = z_q_flat.view(B, L, C).masked_fill((~flat_mask).view(B, L, 1), 0.0)
 
-        # 直通
         z_q_st = z_e + (z_q - z_e).detach()
 
-        # 3) EMA：用硬 one-hot（避免前期均值化），可选软分配
         with torch.no_grad():
             probs_for_ema = probs_soft if self.ema_use_soft else probs_hard
             assign_sum = probs_for_ema.sum(dim=0)               # [K]
@@ -280,7 +270,6 @@ class VectorQuantizerEMA(nn.Module):
             if self.training:
                 self.codebook.weight.data.copy_(embed)
 
-            # 延迟重启死码本，避免极早期扰动
             if self.training and self.restart_unused and (int(self.step.item()) >= self.min_step_before_restart):
                 dead = self.ema_count < self.restart_threshold
                 if dead.any():
@@ -298,7 +287,6 @@ class VectorQuantizerEMA(nn.Module):
             if self.training and self.use_cosine and self.normalize_after_ema:
                 self.codebook.weight.data = F.normalize(self.codebook.weight.data, dim=1, eps=1e-8)
 
-        # 4) 损失与指标
         m = mask.unsqueeze(-1).float() if mask is not None else torch.ones(B, L, 1, device=z_e.device)
         valid = m.sum().clamp_min(1.0)
         commitment_loss = ((z_q - z_e.detach()) ** 2 * m).sum() / valid
@@ -344,22 +332,19 @@ class DVAEMaskedTransformer(pl.LightningModule):
         vq_loss_weight: float = 1.0,
         lr: float = 3e-4,
         weight_decay: float = 0.01,
-        vq_decay: float = 0.99,                 # 新增：EMA 衰减
-        usage_entropy_weight: float = 0.0,      # 新增：使用熵正则（鼓励更均匀的 code 使用）
-        # 新增：重构多目标与旁路强度
+        vq_decay: float = 0.99,
+        usage_entropy_weight: float = 0.0,
         mse_loss_weight: float = 1.0,
         cos_loss_weight: float = 1.0,
         proto_bypass_weight: float = 1.0,
-        quant_noise_std: float = 0.05,              # 新增：量化前噪声
-        diversity_loss_weight: float = 0.0,         # 新增：码本多样性正则
-        # 新增：透传到 VQ-EMA 的控制
+        quant_noise_std: float = 0.05,
+        diversity_loss_weight: float = 0.0,
         vq_use_gumbel: bool = True,
         vq_gumbel_tau_start: float = 1.0,
         vq_gumbel_tau_end: float = 0.1,
         vq_gumbel_warmup_steps: int = 10000,
         vq_code_dropout_rate: float = 0.05,
         vq_normalize_after_ema: bool = True,
-        # 新增：VQ warmup
         vq_warmup_steps: int = 2000,
     ):
         super().__init__()
@@ -375,13 +360,11 @@ class DVAEMaskedTransformer(pl.LightningModule):
             dropout=dropout,
         )
 
-        # 新增：量化前归一化更稳
         self.enc_norm = nn.LayerNorm(d_model)
         self.pre_vq = nn.Sequential(
             nn.Linear(d_model, code_dim),
             nn.LayerNorm(code_dim),
         )
-        # 切换为 EMA 版 VQ
         self.vq = VectorQuantizerEMA(
             codebook_size,
             code_dim,
@@ -389,15 +372,15 @@ class DVAEMaskedTransformer(pl.LightningModule):
             decay=vq_decay,
             restart_unused=True,
             restart_threshold=1.0,
-            use_cosine=True,                         # 开启余弦检索
+            use_cosine=True,
             use_gumbel=self.hparams.vq_use_gumbel,
             gumbel_tau_start=self.hparams.vq_gumbel_tau_start,
             gumbel_tau_end=self.hparams.vq_gumbel_tau_end,
             gumbel_warmup_steps=self.hparams.vq_gumbel_warmup_steps,
             code_dropout_rate=self.hparams.vq_code_dropout_rate,
             normalize_after_ema=self.hparams.vq_normalize_after_ema,
-            quantize_with_soft=False,   # 训练量化走硬分配
-            ema_use_soft=False,         # EMA 用硬 one-hot
+            quantize_with_soft=False,
+            ema_use_soft=False,
             min_step_before_restart=10,
 
         )
@@ -434,8 +417,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
         x = batch["x"]  # [B,L,E]
         mask = batch["mask"]  # [B,L], 1=valid
         pad_mask = (mask == 0)
-        manual_mask = (mask == -1)  # 新增：手动掩码位置
-        # 替换手动掩码位置
+        manual_mask = (mask == -1)
         if manual_mask.any():
             x[manual_mask] = self.mask_embedding.weight[0]
 
@@ -443,12 +425,11 @@ class DVAEMaskedTransformer(pl.LightningModule):
         h = self.input_proj(x)
         h = self.pos_enc(h)
         h = self.encoder(h, pad_mask=pad_mask)  # [B,L,d_model]
-        h = self.enc_norm(h)                    # 新增：规范化后再量化
+        h = self.enc_norm(h)
 
         # To code space and quantize
         z_e = self.pre_vq(h)  # [B,L,code_dim]
 
-        # 新增：量化前加噪声（仅训练，有效位置）
         if self.training and self.hparams.quant_noise_std > 0.0:
             noise = torch.randn_like(z_e) * self.hparams.quant_noise_std
             noise = noise.masked_fill((batch["mask"] == 0).unsqueeze(-1), 0.0)
@@ -462,10 +443,10 @@ class DVAEMaskedTransformer(pl.LightningModule):
         d = self.post_vq(z_q)
         d = self.decoder_pos_enc(d)
         d = self.decoder(d, pad_mask=pad_mask)  # [B,L,d_model]
-        base = self.output_proj(d)              # 上下文解码路径
-        proto = self.code_to_out(z_q)           # 原型旁路路径
+        base = self.output_proj(d)
+        proto = self.code_to_out(z_q)
         x_hat = base + self.hparams.proto_bypass_weight * proto
-        x_hat = torch.nan_to_num(x_hat)  # 安全清理
+        x_hat = torch.nan_to_num(x_hat)
 
         return {
             "x_hat": x_hat,
@@ -478,7 +459,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
     
     @torch.no_grad()
     def get_encoder_attn_maps(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # 返回 encoder 的自注意力图，便于分析
+        # Return encoder self-attention maps for analysis.
         x = batch["x"]
         mask = batch["mask"]
         pad_mask = (mask == 0)
@@ -495,7 +476,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
     
     @torch.no_grad()
     def get_decoder_attn_maps(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # 返回 decoder 的自注意力图，便于分析
+        # Return decoder self-attention maps for analysis.
         x = batch["x"]
         mask = batch["mask"]
         pad_mask = (mask == 0)
@@ -528,7 +509,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
 
     @staticmethod
     def masked_cosine_loss(x_hat: torch.Tensor, x: torch.Tensor, mask: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
-        # 仅在有效位置计算，避免对 pad 行归一化引发数值问题
+        # Compute cosine loss only on valid positions to avoid padding artifacts.
         B, L, E = x.shape
         m = mask.reshape(-1).bool()              # [B*L]
         if m.sum() == 0:
@@ -554,7 +535,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
         cos = self.masked_cosine_loss(out["x_hat"], x, recon_mask)
         recon_loss = self.hparams.mse_loss_weight * mse + self.hparams.cos_loss_weight * cos
 
-        # VQ loss warmup：前期减弱对 encoder 的约束
+        # Warm up the VQ loss to avoid over-constraining the encoder early.
         if self.trainer is not None:
             step = self.global_step
         else:
@@ -562,7 +543,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
         w = float(min(1.0, step / max(1, self.hparams.vq_warmup_steps)))
         loss = recon_loss + (w * self.vq_loss_weight) * out["vq_loss"]
 
-        # 使用熵正则
+        # Usage entropy regularization.
         if self.hparams.usage_entropy_weight > 0.0:
             valid = batch["mask"].bool()
             idx = out["indices"][valid]
@@ -576,17 +557,17 @@ class DVAEMaskedTransformer(pl.LightningModule):
                 loss = loss + self.hparams.usage_entropy_weight * usage_loss
                 self.log("train/usage_entropy", norm_entropy.detach(), on_step=True, on_epoch=True)
 
-        # 码本多样性正则（稳健版）
+        # Codebook diversity regularization.
         if self.hparams.diversity_loss_weight > 0.0:
             div_loss = self.codebook_diversity_loss(used_only=True) * self.hparams.diversity_loss_weight
             loss = loss + div_loss
             self.log("train/div_loss", div_loss.detach(), on_step=True, on_epoch=True)
 
-        # 可选：数值检查，便于排查
+        # Log a diagnostic flag if the loss becomes NaN.
         if torch.isnan(loss):
             self.log("debug/nan_step", torch.tensor(1.0, device=loss.device), on_step=True, prog_bar=True)
 
-        # 使用度指标（便于快速发现坍塌）
+        # Track codebook usage statistics.
         valid = batch["mask"].bool()
         idx = out["indices"][valid]
         if idx.numel() > 0:
@@ -614,7 +595,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
         recon_loss = self.hparams.mse_loss_weight * mse + self.hparams.cos_loss_weight * cos
         loss = recon_loss + self.vq_loss_weight * out["vq_loss"]
 
-        # 额外：量化路径一致性度量（eval 模式下与 encode/decode 一致）
+        # Measure reconstruction consistency for the quantized path.
         with torch.no_grad():
             x_hat_codes = self.decode_tokens(out["indices"], batch["mask"])
             q_path_mse = self.masked_mse(x_hat_codes, x, batch["mask"])
@@ -634,7 +615,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
                 norm_entropy = entropy / math.log(K)
                 self.log("val/usage_entropy", norm_entropy.detach(), on_epoch=True)
 
-        # 使用度指标（便于快速发现坍塌）
+        # Track codebook usage statistics.
         valid = batch["mask"].bool()
         idx = out["indices"][valid]
         if idx.numel() > 0:
@@ -674,7 +655,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
         h = self.input_proj(x)
         h = self.pos_enc(h)
         h = self.encoder(h, pad_mask=enc_pad_mask)
-        h = self.enc_norm(h)                  # 与训练一致
+        h = self.enc_norm(h)
         z_e = self.pre_vq(h)
         return z_e
 
@@ -692,7 +673,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
         h = self.input_proj(x)
         h = self.pos_enc(h)
         h = self.encoder(h, pad_mask=pad_mask)
-        h = self.enc_norm(h)                  # 与训练一致
+        h = self.enc_norm(h)
         z_e = self.pre_vq(h)
         vq_out = self.vq(z_e, mask=mask)
         return vq_out["indices"]
@@ -708,9 +689,7 @@ class DVAEMaskedTransformer(pl.LightningModule):
           x_hat: [B,L,E]
         """
         self.eval()
-        # Lookup code embeddings
         z_q = F.embedding(indices, self.vq.codebook.weight)  # [B,L,code_dim]
-        # Zero-out pad positions to be safe
         z_q = z_q.masked_fill((mask == 0).unsqueeze(-1), 0.0)
         d = self.post_vq(z_q)
         d = self.decoder_pos_enc(d)
@@ -721,16 +700,16 @@ class DVAEMaskedTransformer(pl.LightningModule):
         return x_hat
 
     def codebook_diversity_loss(self, used_only: bool = True, min_used: int = 2) -> torch.Tensor:
-        # 对码本向量行归一化时加 eps；可选：只在已使用的 code 上计算
+        # Normalize codebook vectors with eps and optionally restrict to used codes.
         W = self.vq.codebook.weight              # [K,C]
         if used_only and hasattr(self.vq, "ema_count") and self.vq.ema_count is not None:
             used = (self.vq.ema_count > 1e-6)
             if used.sum() < min_used:
                 return W.new_zeros(())
-            W = W[used]                          # 仅取已使用 code
+            W = W[used]
         if W.size(0) < 2:
             return W.new_zeros(())
-        Wn = F.normalize(W, dim=1, eps=1e-8)     # 关键：加 eps 防止 NaN
+        Wn = F.normalize(W, dim=1, eps=1e-8)
         G = Wn @ Wn.T                            # [k_used,k_used]
         I = torch.eye(G.size(0), device=G.device, dtype=G.dtype)
         off = G - I
