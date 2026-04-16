@@ -198,3 +198,7 @@ This repository intentionally excludes:
 - unpublished analysis code
 
 It is intended to be a clean public interface for MicroDVAE inference only ✨.
+
+## License
+
+This project is released under the `MIT License`. See [LICENSE](LICENSE) for details.
