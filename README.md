@@ -1,8 +1,12 @@
 # MicroVQVAE 🧬
 
-MicroVQVAE is the public inference repository for **MicroVQVAE**, a genome foundation model that learns **discrete, context-aware genome tokens** from ordered protein sequences. By combining **PAIR-esm2** protein embeddings with a **vector-quantized variational autoencoder**, MicroVQVAE transforms prokaryotic genomes into compact and interpretable token representations while preserving local genomic context.
+MicroVQVAE is a genome foundation model that learns **discrete, context-aware genome tokens** from ordered protein sequences. By combining **PAIR-esm2** protein embeddings with a **vector-quantized variational autoencoder**, it transforms prokaryotic genomes into compact and interpretable token representations while preserving local genomic context.
 
-The model is designed for scalable genome representation learning and supports downstream analyses such as genome comparison, functional discovery, and interpretable token-level exploration. In our study, MicroVQVAE learned stable genome tokens, improved phylogenetic clustering across taxonomic levels, achieved strong performance on BacBench tasks, and captured structural and functional relationships beyond conventional sequence similarity.
+This repository provides the public inference pipeline for applying MicroVQVAE to new genomes. It is intended for scalable genome representation learning and downstream analyses such as genome comparison, functional discovery, and token-level interpretation.
+
+In our study, MicroVQVAE learned stable genome tokens, improved phylogenetic clustering across taxonomic levels, achieved strong performance on BacBench tasks, and captured structural and functional relationships beyond conventional sequence similarity.
+
+The figure below summarizes the inference workflow used in this repository.
 
 <p align="center">
   <img src="pipeline.png" alt="MicroVQVAE pipeline" width="900">
