@@ -5,10 +5,10 @@ from typing import Dict, Tuple
 
 import torch
 
-from .model import MicroDVAEModel
+from .model import MicroVQVAEModel
 
 
-def load_microdvae_checkpoint(checkpoint_path: str | Path, device: str = 'auto') -> Tuple[MicroDVAEModel, Dict[str, object]]:
+def load_microvqvae_checkpoint(checkpoint_path: str | Path, device: str = 'auto') -> Tuple[MicroVQVAEModel, Dict[str, object]]:
     checkpoint_path = Path(checkpoint_path)
     if not checkpoint_path.exists():
         raise FileNotFoundError(f'Checkpoint not found: {checkpoint_path}')
@@ -23,7 +23,7 @@ def load_microdvae_checkpoint(checkpoint_path: str | Path, device: str = 'auto')
     if 'embed_dim' not in hyper_parameters:
         raise KeyError('Checkpoint hyper_parameters are missing embed_dim')
 
-    model = MicroDVAEModel(**hyper_parameters)
+    model = MicroVQVAEModel(**hyper_parameters)
     incompatible = model.load_state_dict(checkpoint['state_dict'], strict=False)
     if incompatible.missing_keys:
         raise RuntimeError(f'Missing required checkpoint keys: {incompatible.missing_keys}')

@@ -7,7 +7,7 @@ from typing import Dict, List
 import numpy as np
 import torch
 
-from .checkpoint import load_microdvae_checkpoint
+from .checkpoint import load_microvqvae_checkpoint
 from .fasta import read_protein_fasta
 from .pair_esm import PairESMEmbedder
 
@@ -38,7 +38,7 @@ def tokenize_protein_fasta(
     embedder = PairESMEmbedder.from_pretrained(pair_esm_model, device=device, dtype=esm_dtype)
     protein_embeddings = embedder.embed_records(records, batch_size=batch_size, max_length=max_length)
 
-    model, hyper_parameters = load_microdvae_checkpoint(checkpoint, device=device)
+    model, hyper_parameters = load_microvqvae_checkpoint(checkpoint, device=device)
     model_device = next(model.parameters()).device
 
     token_chunks: List[torch.Tensor] = []

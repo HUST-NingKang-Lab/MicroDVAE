@@ -716,4 +716,4 @@ class DVAEMaskedTransformer(pl.LightningModule):
         return (off.pow(2).sum() / (G.numel() - G.size(0)))
 
 
-MicroDVAEModel = DVAEMaskedTransformer
+MicroVQVAEModel = DVAEMaskedTransformer

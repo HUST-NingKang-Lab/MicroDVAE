@@ -1,11 +1,11 @@
-# MicroDVAE 🧬
+# MicroVQVAE 🧬
 
-MicroDVAE is the public inference repository for **MicroVQVAE**, a genome foundation model that learns **discrete, context-aware genome tokens** from ordered protein sequences. By combining **PAIR-esm2** protein embeddings with a **vector-quantized variational autoencoder**, MicroVQVAE transforms prokaryotic genomes into compact and interpretable token representations while preserving local genomic context.
+MicroVQVAE is the public inference repository for **MicroVQVAE**, a genome foundation model that learns **discrete, context-aware genome tokens** from ordered protein sequences. By combining **PAIR-esm2** protein embeddings with a **vector-quantized variational autoencoder**, MicroVQVAE transforms prokaryotic genomes into compact and interpretable token representations while preserving local genomic context.
 
 The model is designed for scalable genome representation learning and supports downstream analyses such as genome comparison, functional discovery, and interpretable token-level exploration. In our study, MicroVQVAE learned stable genome tokens, improved phylogenetic clustering across taxonomic levels, achieved strong performance on BacBench tasks, and captured structural and functional relationships beyond conventional sequence similarity.
 
 <p align="center">
-  <img src="pipeline.png" alt="MicroDVAE pipeline" width="900">
+  <img src="pipeline.png" alt="MicroVQVAE pipeline" width="900">
 </p>
 
 ## What the CLI does 🚀
@@ -14,7 +14,7 @@ Given a protein FASTA file in genomic order, the pipeline will:
 
 1. Load **PAIR-esm2** from Hugging Face.
 2. Compute one embedding per protein by mean-pooling the final hidden states.
-3. Load a MicroDVAE checkpoint.
+3. Load a MicroVQVAE checkpoint.
 4. Convert the ordered protein embeddings into discrete token IDs.
 5. Export token IDs and the matched codebook vectors.
 
@@ -24,7 +24,7 @@ Given a protein FASTA file in genomic order, the pipeline will:
 - PyTorch
 - A GPU is recommended for PAIR-esm2 inference, but CPU mode also works
 - Internet access for the first download of `h4duan/PAIR-esm2`, unless you already have a local copy
-- A MicroDVAE checkpoint file
+- A MicroVQVAE checkpoint file
 
 Install dependencies:
 
@@ -43,9 +43,9 @@ The default embedding model is:
 
 You can keep the default or point to a local directory with `--pair-esm-model`.
 
-### MicroDVAE checkpoint
+### MicroVQVAE checkpoint
 
-A public MicroDVAE checkpoint is available on Hugging Face 📦:
+A public MicroVQVAE checkpoint is available on Hugging Face 📦:
 
 - URL: <https://huggingface.co/LudensZhang/MicroDVAE/blob/main/model.ckpt>
 
@@ -114,7 +114,7 @@ python scripts/tokenize_genome.py \
 ### Arguments
 
 - `--input`: protein FASTA file in genomic order
-- `--checkpoint`: MicroDVAE checkpoint path
+- `--checkpoint`: MicroVQVAE checkpoint path
 - `--output-dir`: directory for output files
 - `--pair-esm-model`: Hugging Face model ID or local model directory
 - `--batch-size`: PAIR-esm2 batch size
@@ -135,7 +135,7 @@ Tab-separated table with one row per protein:
 - `sequence_id`: FASTA record ID
 - `description`: FASTA description line
 - `length_aa`: protein length
-- `token_id`: assigned discrete MicroDVAE token
+- `token_id`: assigned discrete MicroVQVAE token
 
 ### `tokens.npy`
 
@@ -186,7 +186,7 @@ The CLI skips empty sequences. If all sequences are empty, it will stop with a v
 
 ### Checkpoint load fails
 
-Make sure the checkpoint is a compatible MicroDVAE checkpoint with:
+Make sure the checkpoint is a compatible MicroVQVAE checkpoint with:
 
 - `hyper_parameters`
 - `state_dict`

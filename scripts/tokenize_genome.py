@@ -9,13 +9,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from microdvae.pipeline import tokenize_protein_fasta
+from microvqvae.pipeline import tokenize_protein_fasta
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='Tokenize an ordered protein FASTA with MicroDVAE and export token IDs plus codebook embeddings.')
+    parser = argparse.ArgumentParser(description='Tokenize an ordered protein FASTA with MicroVQVAE and export token IDs plus codebook embeddings.')
     parser.add_argument('--input', required=True, help='Protein FASTA file in genomic order.')
-    parser.add_argument('--checkpoint', required=True, help='Path to the MicroDVAE checkpoint file.')
+    parser.add_argument('--checkpoint', required=True, help='Path to the MicroVQVAE checkpoint file.')
     parser.add_argument('--output-dir', required=True, help='Directory for tokens and embeddings.')
     parser.add_argument('--pair-esm-model', default='h4duan/PAIR-esm2', help='PAIR-esm2 Hugging Face model ID or local path.')
     parser.add_argument('--batch-size', type=int, default=32, help='PAIR-esm2 inference batch size.')
