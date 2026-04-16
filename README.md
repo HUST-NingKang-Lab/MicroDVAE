@@ -1,10 +1,14 @@
 # MicroDVAE 🧬
 
-MicroDVAE is a lightweight inference-only repository for converting an ordered protein FASTA file into discrete dVAE tokens and their corresponding codebook embeddings.
+MicroDVAE is the public inference repository for **MicroVQVAE**, a genome foundation model that learns **discrete, context-aware genome tokens** from ordered protein sequences. By combining **PAIR-esm2** protein embeddings with a **vector-quantized variational autoencoder**, MicroVQVAE transforms prokaryotic genomes into compact and interpretable token representations while preserving local genomic context.
 
-This repository is designed for **public inference** 🚀. It does not include training code, benchmark scripts, private datasets, or large model weights inside the repository.
+The model is designed for scalable genome representation learning and supports downstream analyses such as genome comparison, functional discovery, and interpretable token-level exploration. In our study, MicroVQVAE learned stable genome tokens, improved phylogenetic clustering across taxonomic levels, achieved strong performance on BacBench tasks, and captured structural and functional relationships beyond conventional sequence similarity.
 
-## What the CLI does
+<p align="center">
+  <img src="pipeline.png" alt="MicroDVAE pipeline" width="900">
+</p>
+
+## What the CLI does 🚀
 
 Given a protein FASTA file in genomic order, the pipeline will:
 
@@ -45,7 +49,7 @@ A public MicroDVAE checkpoint is available on Hugging Face 📦:
 
 - URL: <https://huggingface.co/LudensZhang/MicroDVAE/blob/main/model.ckpt>
 
-This repository still expects a **local checkpoint path** for `--checkpoint`, so download the file first.
+This repository expects a **local checkpoint path** for `--checkpoint`, so download the file first.
 
 Example:
 
@@ -187,17 +191,6 @@ Make sure the checkpoint is a compatible MicroDVAE checkpoint with:
 - `hyper_parameters`
 - `state_dict`
 - encoder and VQ weights matching the public inference model
-
-## Repository scope
-
-This repository intentionally excludes:
-
-- model weights
-- training scripts
-- benchmark pipelines
-- unpublished analysis code
-
-It is intended to be a clean public interface for MicroDVAE inference only ✨.
 
 ## License
 
